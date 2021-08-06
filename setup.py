@@ -2,6 +2,7 @@
 
 ########################################################################################################################
 # Do not forget to adjust the following variables to your own plugin.
+#
 
 # The plugin's identifier, has to be unique
 from setuptools import setup

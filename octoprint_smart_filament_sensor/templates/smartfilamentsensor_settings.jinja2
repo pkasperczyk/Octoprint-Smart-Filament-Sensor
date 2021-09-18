@@ -1,5 +1,6 @@
 <!-- Mofifications -->
 <!-- 2021-08-18 add detection of "sensor physical distance" -->
+<!-- 2021-09-18 enhance description, add retraction distance -->
 
 
 <div id="settings_plugin_smartfilamentsensor">
@@ -25,7 +26,7 @@
                 <select class="select-mini" data-bind="value: settingsViewModel.settings.plugins.smartfilamentsensor.detection_method">
                     <option value=0>{{ _('Timeout detection') }}</option>
                     <option value=1>{{ _('Distance detection') }}</option>
-                    <option value=2>{{ _('New detection') }}</option>
+                    <option value=2>{{ _('Distance detection 2') }}</option>
                 </select>
             </div>
         </div>
@@ -95,22 +96,45 @@
         <div class="control-group" >
             <button class="btn btn-primary span4" data-bind="enable: enableDetectionPhysicalDistance, click: function() { detectPhysicalDistance(); }" title="{{ _('Start detection of physical distance')|edq }}">Detect physical distance</button>
         </div>
-        <div class="control-group" >
-            <label class="control-label">{{ _('Physical distance:') }} <span data-bind="text: physicalDistance"></span></label>
+        <span class="help-block"><small>E Steps should be calibrated before detection. You can run detection method many times and detected distances may be different. Low state [mm] is distance the filament has moved when the sensor reported Low state. High state [mm] is distance the filament has moved when the sensor reported High state. Total is the sum of Low and High state. Detected values could be helpful to set proper tolerance value, which should be higher than them.</small></span>
+        </br>
+        <table width="80%" align="center">
+            <tr>
+                <td><span>Total [mm]</span></td>
+                <td><span>Low state [mm]</span></td>
+                <td><span>High state [mm]</span></td>
+            </tr>
+            <tr>
+                <td><span data-bind="text: physicalDistance"></span></td>
+                <td><span data-bind="text: physicalDistanceLow"></span></td>
+                <td><span data-bind="text: physicalDistanceHigh"></span></td>
+            </tr>
+        </table>
+        </br>
+        <!-- Enable / Disable detection -->
+        <div class="control-group">
+            <div class="controls" data-toggle="tooltip" title="{{ _('Enable detection based on total distance') }}">
+                <label class="checkbox">
+                    <input type="checkbox" data-bind="checked: settingsViewModel.settings.plugins.smartfilamentsensor.motion_sensor_total_distance_detection"> {{ _('Total distance detection') }}
+                </label>
+                <span class="help-block"><small>If this option is set, reference point will be set to these extruder values, when sensor reports High state. If this option is unset, reference point will be set, when sensor changes state.</small></span>
+            </div>
         </div>
-        <div class="control-group" >
-            <label class="control-label">{{ _('Physical distance low:') }} <span data-bind="text: physicalDistanceLow"></span></label>
-        </div>
-        <div class="control-group" >
-            <label class="control-label">{{ _('Physical distance high:') }} <span data-bind="text: physicalDistanceHigh"></span></label>
-        </div>
-        <label class="control-label">{{ _('Physical distances tolerance:') }}</label>
+        <label class="control-label">{{ _('Tolerance:') }}</label>
             <div class="controls">
                 <div class="input-append" data-toggle="tooltip" title="{{ _('Tolerance') }}">
                     <input type="number" step="0.1" min="0" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.smartfilamentsensor.motion_sensor_physical_distance_tolerance">
                     <span class="add-on">mm</span>
                 </div>
-                <!--<span class="help-block"><small>Description</small></span>-->
+                <span class="help-block"><small>If "current" extruder value (based on GCode) minus last "reference point" extruder value is higher than tolerance, pause command will be executed.</small></span>
+            </div>
+        <label class="control-label">{{ _('Retraction distance:') }}</label>
+            <div class="controls">
+                <div class="input-append" data-toggle="tooltip" title="{{ _('Retraction distance') }}">
+                    <input type="number" step="0.1" min="0" class="input-mini text-right" data-bind="value: settingsViewModel.settings.plugins.smartfilamentsensor.motion_sensor_retraction_distance">
+                    <span class="add-on">mm</span>
+                </div>
+                <span class="help-block"><small>Value should be equal to retraction distance in slider, for example Cura. It seems, it should be less than tolerance value.</small></span>
             </div>
         </div>
     </form>

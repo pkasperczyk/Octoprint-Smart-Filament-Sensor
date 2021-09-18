@@ -1,5 +1,6 @@
 #Modifications
 #2021-08-18 add detection of "sensor physical distance"
+#2021-09-18 improve detection of print problem, clean up code
 
 # coding=utf-8
 from __future__ import absolute_import
@@ -27,12 +28,13 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
         GPIO.setwarnings(False)        # Disable GPIO warnings
 
         self.print_started = False
+        self.preLastE = -1
         self.lastE = -1
         self.currentE = -1
         self.START_DISTANCE_OFFSET = 7
         self.send_code = False
         self._data = SmartFilamentSensorDetectionData(self.motion_sensor_detection_distance, True, self.updateToUi)
-        self.lastEHigh = -1 #not set
+        self.lastEStateChange = -1 #not set
         self.previousState = -1 #not set
 
 #Properties
@@ -93,6 +95,14 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
     def motion_sensor_physical_distance_tolerance(self):
         return float(self._settings.get(["motion_sensor_physical_distance_tolerance"]))
 
+    @property
+    def motion_sensor_retraction_distance(self):
+        return float(self._settings.get(["motion_sensor_retraction_distance"]))
+
+    @property
+    def motion_sensor_total_distance_detection(self):
+        return float(self._settings.get(["motion_sensor_total_distance_detection"]))
+
 
 # Initialization methods
     def _setup_sensor(self):
@@ -140,7 +150,7 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
             mode=1,    # Board Mode. Changed to BCM (1)
             motion_sensor_enabled = True, #Sensor detection is enabled by default
             motion_sensor_pin=17,  # Default is no pin(-1). Changed to 17
-            detection_method = 2, # 0 = timeout detection, 1 = distance detection, 2 = new detection
+            detection_method = 2, # 0 = timeout detection, 1 = distance detection, 2 = distance detection 2
 
             # Distance detection
             motion_sensor_detection_distance = 15, # Recommended detection distance from Marlin would be 7
@@ -150,11 +160,13 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
             pause_command="M600",
             #send_gcode_only_once=False,  # Default set to False for backward compatibility
 
-            # Physical distance (for sensor)
+            # For distance detection 2
             motion_sensor_physical_distance = -1,
             motion_sensor_physical_distance_low = -1,
             motion_sensor_physical_distance_high = -1,
-            motion_sensor_physical_distance_tolerance = 0.6
+            motion_sensor_physical_distance_tolerance = 10.0,
+            motion_sensor_retraction_distance = 6.0,
+            motion_sensor_total_distance_detection = False
         )
 
     def on_settings_save(self, data):
@@ -199,7 +211,6 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
         distance = 0
         distanceLow = 0
         distanceHigh = 0
-        self._printer.commands("M92 E101.0")
         while True:
             extruderValue -= 0.1
             self._printer.extrude(-0.1, 200) #relative
@@ -228,10 +239,9 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
             if (extruderValue < -20.00):
                 self._logger.info("Step 4, state = "+str(state)+", eV = "+str(extruderValue))
                 break
-        self._settings.set(["motion_sensor_physical_distance"], distance)
-        self._settings.set(["motion_sensor_physical_distance_low"], distanceLow)
-        self._settings.set(["motion_sensor_physical_distance_high"], distanceHigh)
-        #self._settings.save(True, True)
+        self._settings.set(["motion_sensor_physical_distance"], round(distance,1))
+        self._settings.set(["motion_sensor_physical_distance_low"], round(distanceLow,1))
+        self._settings.set(["motion_sensor_physical_distance_high"], round(distanceHigh,1))
         self._settings.save(True)
         self._logger.info("Physical distance detection ended. Distance is "+str(distance)+", distance low is "+str(distanceLow)+", distance high is "+str(distanceHigh))
     
@@ -291,14 +301,6 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
             self.send_code = True
             self._data.filament_moving = False
 
-    def handleNewDetection (self):
-        # Check if stop signal was already sent
-        if(not self.send_code):
-            self._logger.debug("Motion sensor detected no movement - New detection")
-            self._printer.pause_print()
-            self.send_code = True
-            self._data.filament_moving = False
-
     # Reset the distance, if the remaining distance is smaller than the new value
     def reset_distance (self, pPin):
         self._logger.debug("Motion sensor detected movement")
@@ -309,10 +311,11 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
 
     # Initialize the distance detection values
     def init_distance_detection(self):
+        self.preLastE = float(-1)
         self.lastE = float(-1)
         self.currentE = float(0)
         self.reset_remainin_distance()
-        self.lastEHigh = -1 #not set
+        self.lastEStateChange = -1 #not set
         self.previousState = GPIO.input(self.motion_sensor_pin)
 
     # Reset the remaining distance on start or resume
@@ -359,6 +362,7 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
             # Only with absolute extrusion the delta distance must be calculated
             if (self._data.absolut_extrusion):
                 # LastE is not used and set to the same value as currentE
+                self.preLastE = self.lastE
                 if (self.lastE == -1):
                     self.lastE = pE
                 else:
@@ -370,27 +374,22 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
             # Calculate the remaining distance from detection distance
             # currentE - lastE is the delta distance
             if(self._data.absolut_extrusion):
-                deltaDistance = self.currentE - self.lastE
+                deltaDistance = self.lastE - self.preLastE
             # With relative extrusion the current extrusion value is the delta distance
             else:
-                deltaDistance = float(pE)
+                deltaDistance = float(self.preLastE)
             
-            if (deltaDistance > 0 and deltaDistance < 5.9) :
-                #0.012 - 1
-                #0.5 - 5
-                # y = 
-                #delta - x
-                toleranceMultiplier = 1+deltaDistance*8
-                tolerance = toleranceMultiplier*self.motion_sensor_physical_distance_tolerance
-                rDist = self.motion_sensor_physical_distance+tolerance+self.lastEHigh-self.currentE
-                if (self.lastEHigh != -1 and rDist < 0):
-                    self._logger.info("Detection: CurrentE: "+str(self.currentE)+", EHigh: "+str(self.lastEHigh)+",deltaE: "+str(deltaDistance)+", tolerance: "+str(tolerance)+", rDist: "+str(rDist))
-                    self.handleNewDetection()
-                
+            if (self.preLastE != -1 and deltaDistance > 0 and deltaDistance < self.motion_sensor_retraction_distance):
                 state = GPIO.input(self.motion_sensor_pin)
-                if (self.previousState != state and state):
-                    self.lastEHigh = self.currentE
-                    self._logger.info("Change: CurrentE: "+str(self.currentE)+", EHigh: "+str(self.lastEHigh)+",deltaE: "+str(deltaDistance)+", tolerance: "+str(tolerance)+", rDist: "+str(rDist))
+                rDist = self.motion_sensor_physical_distance_tolerance - (self.lastE-self.lastEStateChange)
+                if (self.lastEStateChange != -1 and rDist < 0):
+                    self._logger.info("Detection: LastE: "+str(self.lastE)+",deltaE: "+str(deltaDistance)+", state: "+str(state)+", rDist: "+str(rDist))
+                    self.printer_change_filament()
+                
+                
+                if (self.previousState != state and ((self.motion_sensor_total_distance_detection and state == 1) or not self.motion_sensor_total_distance_detection)):
+                    self.lastEStateChange = self.lastE  #lastE is more accurate then currentE
+                    self._logger.info("Change: LastE: "+str(self.lastE)+",deltaE: "+str(deltaDistance)+", state: "+str(state)+", rDist: "+str(rDist))
                 self.previousState = state
 
     def updateToUi(self):

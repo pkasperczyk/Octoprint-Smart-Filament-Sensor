@@ -146,7 +146,7 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
             mode=0,    # Board Mode
             motion_sensor_enabled = True, #Sensor detection is enabled by default
             motion_sensor_pin=-1,  # Default is no pin
-            detection_method = 2, # 0 = timeout detection, 1 = distance detection, 2 = distance detection 2
+            detection_method = 0, # 0 = timeout detection, 1 = distance detection, 2 = distance detection 2
 
             # Distance detection
             motion_sensor_detection_distance = 15, # Recommended detection distance from Marlin would be 7

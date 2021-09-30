@@ -1,6 +1,3 @@
-// Modifications
-// 2021-08-18 add detection of "sensor physical distance"
-
 $(function(){
     function SmartFilamentSensorSettingsViewModel(parameters){
         var self = this;

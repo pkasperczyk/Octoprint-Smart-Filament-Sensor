@@ -1,7 +1,3 @@
-#Modifications
-#2021-08-18 add detection of "sensor physical distance"
-#2021-09-18 improve detection of print problem, clean up code
-
 # coding=utf-8
 from __future__ import absolute_import
 import octoprint.plugin

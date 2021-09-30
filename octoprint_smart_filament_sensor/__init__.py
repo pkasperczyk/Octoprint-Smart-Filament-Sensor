@@ -143,9 +143,9 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
     def get_settings_defaults(self):
         return dict(
             #Motion sensor
-            mode=1,    # Board Mode. Changed to BCM (1)
+            mode=0,    # Board Mode
             motion_sensor_enabled = True, #Sensor detection is enabled by default
-            motion_sensor_pin=17,  # Default is no pin(-1). Changed to 17
+            motion_sensor_pin=-1,  # Default is no pin
             detection_method = 2, # 0 = timeout detection, 1 = distance detection, 2 = distance detection 2
 
             # Distance detection
@@ -319,7 +319,7 @@ class SmartFilamentSensor(octoprint.plugin.StartupPlugin,
     def reset_remainin_distance(self):
         self._data.remaining_distance = (float(self.motion_sensor_detection_distance) + self.START_DISTANCE_OFFSET)
 
-    # Calculate the remaining distance or calculation for EHigh
+    # Calculate the remaining distance or calculation for detection method 2
     def calc_distance(self, pE):
         if (self.detection_method == 1):
             # Only with absolute extrusion the delta distance must be calculated
